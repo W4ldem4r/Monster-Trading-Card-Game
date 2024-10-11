@@ -7,4 +7,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="Backend\" />
+    <None Remove="Backend\Server\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Backend\" />
+    <Folder Include="Backend\Server\" />
+  </ItemGroup>
 </Project>

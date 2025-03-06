@@ -1,18 +1,26 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Backend\Server\Models\Packages.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="Backend\" />
     <None Remove="Backend\Server\" />
+    <None Remove="Backend\Server\Models\NewFile1.txt" />
+    <None Remove="Backend\Server\Models\NewFile2.txt" />
+    <None Remove="Backend\Server\Models\NewFile3.txt" />
+    <None Remove="Backend\Server\NewFile1.txt" />
   </ItemGroup>
+
   <ItemGroup>
-    <Folder Include="Backend\" />
-    <Folder Include="Backend\Server\" />
+    <PackageReference Include="Npgsql" Version="9.0.3" />
   </ItemGroup>
 </Project>

@@ -4,11 +4,12 @@ namespace MTCG
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             //Server wird gestartet
             var server = new HttpServer();
-            server.Start();
+            await server.StartServer();
+           
         }
     }
 }

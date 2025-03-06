@@ -1,22 +1,28 @@
 ﻿using System;
 using System.Text.Json;
-
+using System.Threading.Tasks;
+using MTCG.Backend.Server;
 
 namespace MTCG.Backend.Server
 {
-	public class Router
-	{
+    public class Router
+    {
         private readonly Controller _controller = new Controller();
 
-        //request werden in get und post aufgeteilt
-        public HttpResponse HandleRequest(string method, string path, string body)
+        // Requests are split into GET and POST handlers
+        public async Task<HttpResponse> HandleRequest(string method, string path, string body, string auth)
         {
             switch (method)
             {
                 case "GET":
-                    return GetHandler(path);
+                    return await GetHandlerAsync(path, body, auth);
                 case "POST":
-                    return PostHandler(path, body);
+                    return await PostHandlerAsync(path, body, auth);
+                case "PUT":
+                    return await PutHandlerAsync(path, body, auth);  //x                
+                case "DELETE":
+                    return await DeleteHandlerAsync(path, body, auth); //x
+                    
                 default:
                     return new HttpResponse
                     {
@@ -25,29 +31,60 @@ namespace MTCG.Backend.Server
                         body = JsonSerializer.Serialize(new { message = "405 Method Not Allowed" })
                     };
             }
-	}
-        //schickt direkten response zurück
-        private HttpResponse GetHandler(string path)
+        }
+        
+        // Sends a direct response back
+        private async Task<HttpResponse> GetHandlerAsync(string path, string body, string auth)
         {
-            return new HttpResponse
+            switch (path)
             {
-                status = 200,
-                message = "OK",
-                body = JsonSerializer.Serialize(new { message = "OK! (GET)" })
-            };
+                ///so ein return am ende einer jeden funktion
+                case "/cards":
+                    return await _controller.ShowCardsOfUser(auth);
+                case "/deck":
+                    return await _controller.ShowDeckOfUser(auth);
+                case "/deck?format=plain":
+                    return await _controller.ShowDeckOfUserPlain(auth); 
+                case string stringpath when path.StartsWith("/users/"): 
+                    return await _controller.UserdataShow(body,auth, path); 
+                case "/stats":
+                  return await _controller.UserStatsShow(body,auth);
+                case "/scoreboard":
+                    return await _controller.ScoreCheck(); //x
+                case "/tradings":
+                //    return await _controller.PackageOpen(body); //x
+                
+                default:
+
+                    return new HttpResponse
+                    {
+                        status = 404,
+                        message = "Not Found",
+                        body = JsonSerializer.Serialize(new { message = "404 Not Found" })
+                    };
+            }
+
+            // await Task.Yield(); 
+
         }
 
-        //posts werden je nach pfad umgeleitet zu den entsprechenden funktionen in controller
-        private HttpResponse PostHandler(string path, string body)
+        // POST requests are routed to corresponding functions in the controller
+        private async Task<HttpResponse> PostHandlerAsync(string path, string body, string auth)
         {
             switch (path)
             {
                 case "/users":
-                    return _controller.Register(body);
+                    return await _controller.Register(body);
                 case "/sessions":
-                    return _controller.Login(body);
+                    return await _controller.Login(body);
                 case "/packages":
-                    return _controller.PackageCreation(body);
+                    return await _controller.PackageCreation(body, auth); //x
+                case "/transactions/packages":
+                    return await _controller.PackageOpen(auth); //x
+                case string paths when path.StartsWith("/tradings/"):
+                //    await HandleTrade(body,auth); //x                    
+                case "/battles":
+                //    await HandleBattleRequestAsync(body, auth); //x                 
                 default:
                     return new HttpResponse
                     {
@@ -57,5 +94,52 @@ namespace MTCG.Backend.Server
                     };
             }
         }
+
+
+        private async Task<HttpResponse> PutHandlerAsync(string path, string body, string auth)
+        {
+            switch (path)
+            {
+                case string stringpath when path.StartsWith("/users/"):
+                   return await _controller.UpdateUserBio(body, auth, path);     //x
+               case "/deck":
+                  return await _controller.PutInDeck(body,auth);    //x
+                default:
+                    return new HttpResponse
+                    {
+                        status = 404,
+                        message = "Not Found",
+                        body = JsonSerializer.Serialize(new { message = "404 Not Found" })
+                    };
+            }
+        }
+
+
+                private async Task<HttpResponse> DeleteHandlerAsync(string path, string body, string auth)
+        {
+            switch (path)
+            {
+                case string stringpath when path.StartsWith("/tradings/"):
+                //        return await _controller.DeleteTrading(body);           //x
+                default:
+                    return new HttpResponse
+                    {
+                        status = 404,
+                        message = "Not Found",
+                        body = JsonSerializer.Serialize(new { message = "404 Not Found" })
+                    };
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
     }
 }

@@ -9,10 +9,12 @@ namespace MTCG.Backend.Server
 {
     public class HttpServer
     {
-        public void Start()
+        private static TcpListener httpServer;
+
+        public async Task StartServer()
         {
-            // ===== I. Start the HTTP-Server =====
-            var httpServer = new TcpListener(IPAddress.Loopback, 10001); 
+            // Start the HTTP-Server
+           httpServer = new TcpListener(IPAddress.Loopback, 10001);
             httpServer.Start();
             Console.WriteLine("Server started on port 10001...");
 
@@ -20,90 +22,98 @@ namespace MTCG.Backend.Server
 
             while (true)
             {
-                // ----- 0. Accept the TCP-Client and create the reader and writer -----
-                var clientSocket = httpServer.AcceptTcpClient();
-                using var writer = new StreamWriter(clientSocket.GetStream()) { AutoFlush = true };
-                using var reader = new StreamReader(clientSocket.GetStream());
-
-                // ----- 1. Read the HTTP-Request -----
-                string? line = reader.ReadLine();
-
-                // 1.1 first line in HTTP contains the method, path and HTTP version
-                if (line != null)
+                try
                 {
-                    Console.WriteLine(line);
-                    var request = line.Split(' ');
-                    if (request.Length < 3)
-                    {
-                        writer.WriteLine("HTTP/1.0 400 Bad Request");
-                        writer.WriteLine();
-                        continue;
-                    }
+                    TcpClient clientSocket = await httpServer.AcceptTcpClientAsync();
 
-                    string method = request[0];
-                    string path = request[1];
-
-                    // 1.2 read the HTTP-headers (in HTTP after the first line, until the empty line)
-                    int content_length = 0; // we need the content_length later, to be able to read the HTTP-content
-                    while ((line = reader.ReadLine()) != null)
-                    {
-                        Console.WriteLine(line);
-                        if (line == "")
-                        {
-                            break;  // empty line indicates the end of the HTTP-headers
-                        }
-
-                        // Parse the header
-                        var parts = line.Split(':');
-                        if (parts.Length == 2 && parts[0] == "Content-Length")
-                        {
-                            content_length = int.Parse(parts[1].Trim());
-                        }
-                    }
-
-                    // 1.3 read the body if existing
-                    string requestBody = string.Empty;
-                    if (content_length > 0)
-                    {
-                        var data = new StringBuilder(200);
-                        char[] chars = new char[1024];
-                        int bytesReadTotal = 0;
-                        while (bytesReadTotal < content_length)
-                        {
-                            var bytesRead = reader.Read(chars, 0, chars.Length);
-                            bytesReadTotal += bytesRead;
-                            if (bytesRead == 0)
-                                break;
-                            data.Append(chars, 0, bytesRead);
-                        }
-                        requestBody = data.ToString();
-                        Console.WriteLine(requestBody);
-                    }
-
-                    // ----- 2. Do the processing -----
-                    var response = router.HandleRequest(method, path, requestBody);
-
-                    Console.WriteLine("----------------------------------------");
-
-                    // ----- 3. Write the HTTP-Response -----
-                    writer.WriteLine($"HTTP/1.1 {response.status} {response.message}");    
-                    writer.WriteLine("Content-Type: application/json; charset=utf-8");    
-                    writer.WriteLine();
-                    writer.WriteLine(response.body);    
-
-                    Console.WriteLine("========================================");
+                    _ = Task.Run(() => HandleClient(clientSocket, router)); // _ = Task.Run(() => = standart mutlithreading                                                                      
                 }
-                else
+                catch (Exception ex)
                 {
-                    writer.WriteLine("HTTP/1.0 400 Bad Request");
-                    writer.WriteLine();
+                    Console.WriteLine($"Error accepting client: {ex.Message}");
                 }
-
-                // Socket connection wird geschlossen
-                clientSocket.Close();
             }
         }
+        private async Task HandleClient(TcpClient clientSocket, Router router)
+        {
+            using var writer = new StreamWriter(clientSocket.GetStream()) { AutoFlush = true };
+            using var reader = new StreamReader(clientSocket.GetStream());
+
+            // Read the HTTP-Request
+            string? line = await reader.ReadLineAsync();
+            if (line != null)
+            {
+                Console.WriteLine(line);
+                var request = line.Split(' ');
+                if (request.Length < 3)
+                {
+                    await writer.WriteLineAsync("HTTP/1.0 400 Bad Request\r\n");
+                    return;
+                }
+
+                string method = request[0];
+                string path = request[1];
+                string auth = string.Empty;
+                // Read the HTTP-headers
+                int contentLength = 0;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    Console.WriteLine(line);
+                    if (line == "")
+                    {
+                        break;
+                    }
+                    var parts = line.Split(':');
+                    if (parts.Length == 2 && parts[0].Trim() == "Authorization")
+                    {
+                        // Extract the token from the Authorization header
+                        string authHeader = parts[1].Trim();
+                        if (authHeader.StartsWith("Bearer "))
+                        {
+                            // Remove the "Bearer " part and extract the username part before "-mtcgToken"
+                            auth = authHeader.Substring(7).Split('-')[0];
+                            Console.WriteLine("Extracted Auth: " + auth);
+                        }
+                    }
+
+                    if (parts.Length == 2 && parts[0] == "Content-Length")
+                    {
+                        contentLength = int.Parse(parts[1].Trim());
+                    }
+                }
+
+                // Read the body if it exists
+                string requestBody = string.Empty;
+                if (contentLength > 0)
+                {
+                    var data = new char[contentLength];
+                    await reader.ReadAsync(data, 0, contentLength);
+                    requestBody = new string(data);
+                    Console.WriteLine(requestBody);
+                }
+
+                // Process the request
+                var response = await router.HandleRequest(method, path, requestBody,auth);
+
+                Console.WriteLine("----------------------------------------");
+
+                // Write the HTTP-Response
+                await writer.WriteLineAsync($"HTTP/1.1 {response.status} {response.message}\r\n");
+                await writer.WriteLineAsync($"Content-Type: {response.type}; charset=utf-8\r\n");
+                await writer.WriteLineAsync("\r\n");
+                await writer.WriteLineAsync(response.body);
+
+                Console.WriteLine("========================================");
+            }
+            else
+            {
+                await writer.WriteLineAsync("HTTP/1.0 400 Bad Request\r\n");
+            }
+
+            clientSocket.Close();
+        }
     }
+
 
     //Optionaler StreamTracer zum späteren Debugging
     public class StreamTracer : StreamWriter

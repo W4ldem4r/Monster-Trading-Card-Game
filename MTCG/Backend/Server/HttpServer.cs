@@ -95,7 +95,7 @@ namespace MTCG.Backend.Server
                 // Process the request
                 var response = await router.HandleRequest(method, path, requestBody,auth);
 
-                Console.WriteLine("----------------------------------------");
+               Console.WriteLine("----------------------------------------");
 
                 // Write the HTTP-Response
                 await writer.WriteLineAsync($"HTTP/1.1 {response.status} {response.message}\r\n");

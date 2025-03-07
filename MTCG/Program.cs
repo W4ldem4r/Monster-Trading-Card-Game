@@ -6,7 +6,7 @@ namespace MTCG
     {
         static async Task Main(string[] args)
         {
-            //Server wird gestartet
+            //Server starts
             var server = new HttpServer();
             await server.StartServer();
            

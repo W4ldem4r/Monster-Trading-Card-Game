@@ -381,7 +381,7 @@ namespace MTCG.Backend.Server
                     }
                 }
 
-                // Load user cards and decks after closing the reader
+              
                 foreach (var user in users.Values)
                 {
                     user.Cards = LoadUserCards(user.ID, connection);

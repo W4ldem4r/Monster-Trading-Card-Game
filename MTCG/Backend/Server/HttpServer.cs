@@ -54,7 +54,7 @@ namespace MTCG.Backend.Server
                 string method = request[0];
                 string path = request[1];
                 string auth = string.Empty;
-                // Read the HTTP-headers
+                
                 int contentLength = 0;
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
@@ -66,11 +66,11 @@ namespace MTCG.Backend.Server
                     var parts = line.Split(':');
                     if (parts.Length == 2 && parts[0].Trim() == "Authorization")
                     {
-                        // Extract the token from the Authorization header
+                        
                         string authHeader = parts[1].Trim();
                         if (authHeader.StartsWith("Bearer "))
                         {
-                            // Remove the "Bearer " part and extract the username part before "-mtcgToken"
+                            // Nehme token raus und speichere ihn
                             auth = authHeader.Substring(7).Split('-')[0];
                             Console.WriteLine("Extracted Auth: " + auth);
                         }
@@ -82,7 +82,7 @@ namespace MTCG.Backend.Server
                     }
                 }
 
-                // Read the body if it exists
+              
                 string requestBody = string.Empty;
                 if (contentLength > 0)
                 {
@@ -92,12 +92,12 @@ namespace MTCG.Backend.Server
                     Console.WriteLine(requestBody);
                 }
 
-                // Process the request
+             
                 var response = await router.HandleRequest(method, path, requestBody,auth);
 
                Console.WriteLine("----------------------------------------");
 
-                // Write the HTTP-Response
+               
                 await writer.WriteLineAsync($"HTTP/1.1 {response.status} {response.message}\r\n");
                 await writer.WriteLineAsync($"Content-Type: {response.type}; charset=utf-8\r\n");
                 await writer.WriteLineAsync("\r\n");
@@ -115,7 +115,7 @@ namespace MTCG.Backend.Server
     }
 
 
-    //Optionaler StreamTracer zum späteren Debugging
+
     public class StreamTracer : StreamWriter
     {
         public StreamTracer(StreamWriter writer) : base(writer.BaseStream)

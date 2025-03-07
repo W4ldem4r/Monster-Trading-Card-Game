@@ -10,7 +10,7 @@ namespace MTCG.Backend.Server
         private Controller _controller = new Controller();
 
 
-        // Requests are split into GET, POST, PUT and DELETE handlers
+        
         public async Task<HttpResponse> HandleRequest(string method, string path, string body, string auth)
         {
             switch (method)
@@ -36,7 +36,7 @@ namespace MTCG.Backend.Server
             }
         }
 
-        // GET Requests
+      
         private async Task<HttpResponse> GetHandlerAsync(string path, string body, string auth)
         {
             switch (path)
@@ -79,7 +79,7 @@ namespace MTCG.Backend.Server
             
         }
 
-        // POST requests 
+       
         private async Task<HttpResponse> PostHandlerAsync(string path, string body, string auth)
         {
             switch (path)

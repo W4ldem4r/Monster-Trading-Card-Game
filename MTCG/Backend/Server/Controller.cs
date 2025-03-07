@@ -152,7 +152,7 @@ namespace MTCG.Backend.Server
         }
 
         //userdaten werden in list und DB abgespeichert
-        public void SaveUser(User ModifiedUser) 
+        public void SaveUser(User ModifiedUser)
         {
             if (_users.ContainsKey(ModifiedUser.Username))
             {
@@ -637,7 +637,7 @@ namespace MTCG.Backend.Server
                 };
             }
 
-            
+
             User? user = await AuthChecker(auth);
             if (user == null)
             {
@@ -649,7 +649,7 @@ namespace MTCG.Backend.Server
                 };
             }
 
-            
+
             if (!Guid.TryParse(TradingIdString, out Guid tradingIdGuid))
             {
                 return new HttpResponse
@@ -774,7 +774,7 @@ namespace MTCG.Backend.Server
                 }
                 else
                 {
-                    
+
                     var delCard = _tradingCards.FirstOrDefault(card => card.Id == cardId);
 
                     if (delCard == null)
@@ -822,57 +822,104 @@ namespace MTCG.Backend.Server
 
 
 
-        private static ConcurrentQueue<User> battleLobby = new ConcurrentQueue<User>();
-        private static readonly object battleLock = new object();
+private static object LobbyLock = new object();
+private static ConcurrentQueue<User> LobbyQueue = new ConcurrentQueue<User>();
+private static ConcurrentDictionary<string, TaskCompletionSource<HttpResponse>> battleWaiters =
+    new ConcurrentDictionary<string, TaskCompletionSource<HttpResponse>>();
 
-        // battle handler
-        public async Task<HttpResponse> Battle(string auth)
+public async Task<HttpResponse> Battle(string auth)
+{
+    User? user = await AuthChecker(auth);
+    if (user == null)
+    {
+        return new HttpResponse
         {
-            User? user = await AuthChecker(auth);
-            if (user == null)
-            {
-                return new HttpResponse
-                {
-                    status = 401,
-                    message = "Unauthorized",
-                    body = JsonSerializer.Serialize(new { message = "Login required to join battle" })
-                };
-            }
+            status = 401,
+            message = "Unauthorized",
+            body = JsonSerializer.Serialize(new { message = "Login required to join battle" })
+        };
+    }
 
-            // player wird in lobby gebracht
-            battleLobby.Enqueue(user);
-            Console.WriteLine($"{user.Username} has joined the battle lobby.");
+    if (user.Deck == null || user.Deck.Count < 4)
+    {
+        return new HttpResponse
+        {
+            status = 400,
+            message = "Bad Request",
+            body = JsonSerializer.Serialize(new { message = "You dont have the requitements" })
+        };
+    }
 
-            User player1, player2;
-
-            // lock 
-            lock (battleLock)
-            {
-                if (battleLobby.Count >= 2 &&
-                    battleLobby.TryDequeue(out player1) &&
-                    battleLobby.TryDequeue(out player2))
-                {
-                    // Start the battle in a separate task
-                    _ = Task.Run(() => StartBattle(player1, player2));
-
-                    return new HttpResponse
-                    {
-                        status = 200,
-                        message = "Battle started",
-                        body = JsonSerializer.Serialize(new { message = $"{player1.Username} vs {player2.Username}" })
-                    };
-                }
-            }
-
+    lock (LobbyLock)
+    {
+        if (LobbyQueue.Any(u => u.Username == user.Username))
+        {
             return new HttpResponse
             {
-                status = 200,
-                message = "Waiting for opponent...",
-                body = JsonSerializer.Serialize(new { message = "Waiting for another player to join..." })
+                status = 400,
+                message = "Bad Request",
+                body = JsonSerializer.Serialize(new { message = "You are already in the battle queue" })
             };
         }
+        LobbyQueue.Enqueue(user);
+    }
 
-        private async Task StartBattle(User player1, User player2)
+    var tcs = new TaskCompletionSource<HttpResponse>();
+    battleWaiters[user.Username] = tcs;
+
+
+    if (LobbyQueue.Count >= 2)
+    {
+        lock (LobbyLock)
+        {
+            if (LobbyQueue.Count >= 2 &&
+                LobbyQueue.TryDequeue(out var user1) &&
+                LobbyQueue.TryDequeue(out var user2))
+            {
+                Console.WriteLine($"Starting battle between {user1.Username} and {user2.Username}");
+                
+        
+                var battleResult = StartBattle(user1, user2);
+                
+            
+                string jsonResponse = JsonSerializer.Serialize(new { 
+                    winner = battleResult.Winner,
+                    log = battleResult.Log
+                });
+
+   
+                if (battleWaiters.TryRemove(user1.Username, out var tcs1))
+                {
+                    tcs1.SetResult(new HttpResponse
+                    {
+                        status = 200,
+                        message = "OK",
+                        body = jsonResponse
+                    });
+                }
+
+                if (battleWaiters.TryRemove(user2.Username, out var tcs2))
+                {
+                    tcs2.SetResult(new HttpResponse
+                    {
+                        status = 200,
+                        message = "OK",
+                        body = jsonResponse
+                    });
+                }
+            }
+        }
+    }
+
+
+
+        return await tcs.Task;
+    
+
+}
+
+
+private Battle.BattleResult StartBattle(User player1, User player2)
         {
             Console.WriteLine($"Battle started between {player1.Username} and {player2.Username}");
 
@@ -881,23 +928,33 @@ namespace MTCG.Backend.Server
 
             Console.WriteLine(result.Log);
 
-
-            // Determine winner and update ELO
             if (result.Winner == player1.Username)
             {
                 player1.Wins++;
                 player2.Losses++;
+                player1.Elo += 3;
+                player2.Elo = Math.Max(player2.Elo - 5, 100); 
             }
             else if (result.Winner == player2.Username)
             {
                 player2.Wins++;
                 player1.Losses++;
+                player2.Elo += 3;
+                player1.Elo = Math.Max(player1.Elo - 5, 100); 
             }
-
-            // Save updated stats (assuming a SaveUser function exists)
+            else
+            {
+                player1.Elo -= 1;
+                player2.Elo -= 1; 
+            }
+           
             SaveUser(player1);
             SaveUser(player2);
+            
+            return result;
         }
+
+
 
 
         public async Task<HttpResponse> UpgradeRandomCard(string auth)

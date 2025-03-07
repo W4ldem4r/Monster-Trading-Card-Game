@@ -49,6 +49,7 @@ namespace UnitTest
             user2.Elo = 100;
 
             Assert.AreEqual(120, user.Elo);
+            Assert.AreEqual(100, user2.Elo);
         }
 
         [TestMethod]
